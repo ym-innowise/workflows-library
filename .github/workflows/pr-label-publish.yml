@@ -84,14 +84,15 @@ jobs:
           echo "Pre-merge RC version: $(node -pe 'require(\"./package.json\").version')"
 
       - name: Produce publishable artifact (npm pack)
+        id: pack
         run: |
           set -euo pipefail
           TARFILE=$(npm pack | tail -n1)
           echo "Packed artifact: $TARFILE"
-          echo "$TARFILE" > rc-artifact-name.txt
+          echo "tarfile=$TARFILE" >> "$GITHUB_OUTPUT"
           ls -la "$TARFILE"
 
       - uses: actions/upload-artifact@v4
         with:
           name: rc-tarball
-          path: ${{ inputs.working-directory }}/$(cat rc-artifact-name.txt)
+          path: ${{ inputs.working-directory }}/${{ steps.pack.outputs.tarfile }}
