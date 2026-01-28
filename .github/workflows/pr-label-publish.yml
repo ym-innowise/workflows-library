@@ -14,6 +14,8 @@ on:
 jobs:
   rc:
     runs-on: ubuntu-latest
+    env:
+      RC_SUFFIX: ${{ vars.RC_SUFFIX || 'dev' }}
     defaults:
       run:
         working-directory: ${{ inputs.working-directory }}
@@ -75,11 +77,13 @@ jobs:
           fi
 
       - name: Create pre-merge RC version suffix (no commit)
+        id: rcver
         run: |
           set -euo pipefail
           BASE=$(node -pe "require('./package.json').version")
           SHA=$(git rev-parse --short HEAD)
-          RC_VERSION="${BASE}-dev-${SHA}"
+          RC_VERSION="${BASE}-${RC_SUFFIX}-${SHA}"
+          echo "rc_version=$RC_VERSION" >> "$GITHUB_OUTPUT"
           npm version --no-git-tag-version "$RC_VERSION"
           RC_VER=$(node -pe "require('./package.json').version")
           echo "Pre-merge RC version: $RC_VER"
@@ -95,5 +99,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: rc-tarball
+          name: ${{ steps.rcver.outputs.rc_version }}
           path: ${{ inputs.working-directory }}/${{ steps.pack.outputs.tarfile }}
