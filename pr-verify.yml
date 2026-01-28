@@ -1,0 +1,50 @@
+name: pr-verify
+on:
+  workflow_call:
+    inputs:
+      working-directory: { required: true, type: string }
+
+jobs:
+  verify:
+    name: pr-verify
+    runs-on: ubuntu-latest
+    environment: PROD
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ vars.NODE_VERSION || '22.10.0' }}
+          cache: npm
+          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+
+      - name: Ensure lockfile exists
+        run: test -f package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Ensure lockfile is not out-of-sync
+        run: |
+          git diff --exit-code package-lock.json || true
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Ensure version bumped in PR
+        run: |
+          git fetch origin main:refs/remotes/origin/main
+          MAIN_VER=$(git show origin/main:package.json | node -pe "JSON.parse(require('fs').readFileSync(0,'utf8')).version")
+          PR_VER=$(node -pe "require('./package.json').version")
+          echo "main=$MAIN_VER pr=$PR_VER"
+          [ "$PR_VER" != "$MAIN_VER" ] || (echo "Version must be bumped in the PR" && exit 1)
