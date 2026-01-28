@@ -1,0 +1,97 @@
+name: gh-pack-rc
+on:
+  workflow_call:
+    inputs:
+      # Node version is read from environment variables (PROD) via vars.NODE_VERSION
+      # Callers do not need to pass it. A safe fallback is used below.
+      node-version:
+        type: string
+        required: false
+      working-directory:
+        type: string
+        required: true
+
+jobs:
+  rc:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ vars.NODE_VERSION || inputs.node-version || '22.10.0' }}
+          cache: npm
+          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+
+      - run: test -f package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
+
+      - name: Ensure version is semver and bumped vs main
+        run: |
+          set -euo pipefail
+          # fetch latest main to compare
+          git fetch origin main:refs/remotes/origin/main || true
+          MAIN_VER=$(git show origin/main:package.json | node -pe "JSON.parse(require('fs').readFileSync(0,'utf8')).version")
+          PR_VER=$(node -pe "require('./package.json').version")
+          echo "main=$MAIN_VER pr=$PR_VER"
+
+          # enforce simple semver X.Y.Z (no pre-release)
+          if ! echo "$PR_VER" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "package.json version must be plain semver X.Y.Z (no pre-release or metadata): $PR_VER"
+            exit 1
+          fi
+
+          # ensure PR version differs from main
+          if [ "$PR_VER" = "$MAIN_VER" ]; then
+            echo "Version must be bumped in the PR (current main: $MAIN_VER)."
+            exit 1
+          fi
+
+      - name: Block if release tag already exists (vX.Y.Z)
+        run: |
+          set -euo pipefail
+          VER=$(node -pe "require('./package.json').version")
+          TAG="v$VER"
+          echo "Checking existing tag $TAG"
+
+          # check git tags on origin
+          if git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
+            echo "Git tag already exists: $TAG"
+            exit 1
+          fi
+
+          # check GitHub release (returns non-zero if release not found)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "GitHub release already exists: $TAG"
+            exit 1
+          fi
+
+      - name: Create pre-merge RC version suffix (no commit)
+        run: |
+          set -euo pipefail
+          BASE=$(node -pe "require('./package.json').version")
+          SHA=$(git rev-parse --short HEAD)
+          RC_VERSION="${BASE}-dev-${SHA}"
+          npm version --no-git-tag-version "$RC_VERSION"
+          echo "Pre-merge RC version: $(node -pe \"require('./package.json').version\")"
+
+      - name: Produce publishable artifact (npm pack)
+        run: |
+          set -euo pipefail
+          TARFILE=$(npm pack | tail -n1)
+          echo "Packed artifact: $TARFILE"
+          echo "$TARFILE" > rc-artifact-name.txt
+          ls -la "$TARFILE"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rc-tarball
+          path: ${{ inputs.working-directory }}/$(cat rc-artifact-name.txt)
