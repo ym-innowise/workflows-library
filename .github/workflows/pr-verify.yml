@@ -30,7 +30,7 @@ jobs:
 
       - name: Ensure lockfile is not out-of-sync
         run: |
-          git diff --exit-code package-lock.json || true
+          git diff --exit-code package-lock.json
 
       - name: Lint
         run: npm run lint
