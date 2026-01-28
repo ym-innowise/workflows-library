@@ -81,7 +81,8 @@ jobs:
           SHA=$(git rev-parse --short HEAD)
           RC_VERSION="${BASE}-dev-${SHA}"
           npm version --no-git-tag-version "$RC_VERSION"
-          echo "Pre-merge RC version: $(node -pe 'require(\"./package.json\").version')"
+          RC_VER=$(node -pe "require('./package.json').version")
+          echo "Pre-merge RC version: $RC_VER"
 
       - name: Produce publishable artifact (npm pack)
         id: pack
