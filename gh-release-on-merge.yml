@@ -1,0 +1,68 @@
+name: gh-release-on-merge
+on:
+  workflow_call:
+    inputs:
+      node-version: { required: true, type: string }
+      working-directory: { required: true, type: string }
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+
+      - run: test -f package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
+
+      - name: Ensure tag does not exist
+        run: |
+          VER=$(node -pe "require('./package.json').version")
+          TAG="v$VER"
+          if git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
+            echo "Tag already exists: $TAG"
+            exit 1
+          fi
+
+      - name: Create release artifact
+        run: |
+          npm pack
+          ls -la *.tgz
+
+      - name: Create Git tag vX.Y.Z
+        run: |
+          VER=$(node -pe "require('./package.json').version")
+          git tag "v$VER"
+          git push origin "v$VER"
+
+      - name: Create GitHub Release and upload asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER=$(node -pe "require('./package.json').version")
+          TAG="v$VER"
+          FILE=$(ls *.tgz | head -n 1)
+
+          # create release (fails if exists)
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes "Automated release for $TAG"
+
+          # upload tarball
+          gh release upload "$TAG" "$FILE"
