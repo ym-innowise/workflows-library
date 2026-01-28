@@ -2,8 +2,6 @@ name: gh-pack-rc
 on:
   workflow_call:
     inputs:
-      # Node version is read from environment variables (PROD) via vars.NODE_VERSION
-      # Callers do not need to pass it. A safe fallback is used below.
       node-version:
         type: string
         required: false
