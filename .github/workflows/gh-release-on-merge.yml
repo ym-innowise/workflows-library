@@ -45,6 +45,20 @@ jobs:
           npm pack
           ls -la *.tgz
 
+      - name: npm publish
+        env:
+          NPM_CONFIG_REGISTRY: https://registry.npmjs.org/
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -n "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > ~/.npmrc
+            npm publish
+          else
+          echo "NPM token not provided"
+          exit 1
+          fi
+
       - name: Create Git tag vX.Y.Z
         run: |
           VER=$(node -pe "require('./package.json').version")
