@@ -41,6 +41,12 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      - name: Validate npm publishability (pack dry-run)
+        run: |
+          set -euo pipefail
+          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > ~/.npmrc
+          npm publish --dry-run
+
       - name: Ensure version bumped in PR
         run: |
           git fetch origin main:refs/remotes/origin/main
