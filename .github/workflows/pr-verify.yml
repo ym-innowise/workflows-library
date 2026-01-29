@@ -42,6 +42,9 @@ jobs:
         run: npm test
 
       - name: Validate npm publishability (pack dry-run)
+        env:
+          NPM_CONFIG_REGISTRY: https://registry.npmjs.org/
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > ~/.npmrc
